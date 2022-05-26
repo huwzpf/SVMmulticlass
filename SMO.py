@@ -6,6 +6,11 @@ import matplotlib.pyplot as plt
 
 
 class SMO:
+    class AlphaMetadata:
+        def __init__(self):
+            self.bound = True
+            self.error_cached = False
+
     def __init__(self, x, y, c, gamma):
         self.b = 0
         self.alpha = np.zeros((x.shape[0], 1))
@@ -14,16 +19,19 @@ class SMO:
         self.c = c
         self.gamma = gamma
         self.eps = 10**(-3)
-        self.not_0_not_c_alphas = set()
-        self.other_alphas = set(range(len(self.alpha)))
+        self.unbound_alphas = set()
+        self.bound_alphas = set(range(len(self.alpha)))
         self.err_cache = {}
+        self.unbound_err_cache = {}
+        self.alpha_metadata = [SMO.AlphaMetadata() for _ in self.alpha]
 
     def get_error(self, idx):
-        if idx in self.err_cache:
+        if self.alpha_metadata[idx].error_cached:
             return self.err_cache[idx]
         else:
             er = self.calculate_error(idx)
             self.err_cache[idx] = er
+            self.alpha_metadata[idx].error_cached = True
             return er
 
     @staticmethod
@@ -63,13 +71,13 @@ class SMO:
     def update_alpha_j(self, i, j, eta):
         ret = self.alpha[j] - float(self.labels[j] * (self.get_error(i) - self.get_error(j))) / eta
         L, H = self.calculate_constrains(i, j)
-        if ret > H:
+        if ret >= H:
             ret = H
-        elif ret < L:
+        elif ret <= L:
             ret = L
         return ret
     def calculate_b(self, i, j, a_i_old, a_j_old):
-
+        #b should be -b ??,
         b_1 = self.b - self.get_error(i) - self.labels[i] * (self.alpha[i] - a_i_old) * \
               self.kernel_function(self.features[i], self.features[i], self.gamma) - self.labels[j] *\
               (self.alpha[j] - a_j_old) * self.kernel_function(self.features[i], self.features[j], self.gamma)
@@ -77,7 +85,7 @@ class SMO:
 
         b_2 = self.b - self.get_error(j) - self.labels[i] * (self.alpha[i] - a_i_old) *\
               self.kernel_function(self.features[i], self.features[j], self.gamma) - self.labels[j] *\
-              (self.alpha[j] - a_j_old) * self.kernel_function(self.features[j], self.features[i], self.gamma)
+              (self.alpha[j] - a_j_old) * self.kernel_function(self.features[j], self.features[j], self.gamma)
 
         if 0 < self.alpha[i] < self.c:
             self.b = b_1
@@ -89,9 +97,9 @@ class SMO:
     def choice_cheuristic(self, i):
         e = self.get_error(i)
         if e >= 0:
-            return min(self.err_cache, key=lambda k: self.err_cache[k])
+            return min(self.unbound_err_cache, key=lambda k: self.unbound_err_cache[k])
         else:
-            return max(self.err_cache, key=lambda k: self.err_cache[k])
+            return max(self.unbound_err_cache, key=lambda k: self.unbound_err_cache[k])
 
     def select_j(self, i):
         random.seed(time.time())
@@ -143,30 +151,44 @@ class SMO:
         return 1
 
     def check_idx_bounds(self, j):
+
+        if self.alpha_metadata[j].error_cached:
+            self.err_cache.pop(j)
+            self.alpha_metadata[j].error_cached = False
+
         if self.alpha[j] != 0 and self.alpha[j] != self.c:
-            self.not_0_not_c_alphas.add(j)
-            if j in self.other_alphas:
-                self.other_alphas.remove(j)
-            if j not in self.err_cache:
-                self.err_cache[j] = self.calculate_error(j)
-        else:
-            if j in self.err_cache:
-                self.err_cache.pop(j)
+            self.unbound_err_cache[j] = self.get_error(j)
+            if self.alpha_metadata[j].bound:
+                self.bound_alphas.remove(j)
+                self.unbound_alphas.add(j)
+                self.alpha_metadata[j].bound = False
+
+        elif not self.alpha_metadata[j].bound:
+            self.bound_alphas.add(j)
+            self.unbound_alphas.remove(j)
+            self.unbound_err_cache.pop(j)
+            self.alpha_metadata[j].bound = True
+
+
 
     def examine_example(self, i, tol):
         E_i = self.get_error(i)
         if (self.labels[i] * E_i < -tol and self.alpha[i] < self.c) or \
                 (self.labels[i] * E_i > tol and self.alpha[i] > 0):
-            if len(self.err_cache) != 0:
+            if len(self.unbound_err_cache) != 0:
                 idx = self.choice_cheuristic(i)
                 if self.take_step(i, idx) == 1:
                     return 1
 
-            for idx in self.not_0_not_c_alphas:
+            tmp_list = list(self.unbound_alphas)
+            np.random.shuffle(tmp_list)
+            for idx in tmp_list:
                 if self.take_step(i, idx) == 1:
                     return 1
 
-            for idx in self.other_alphas:
+            tmp_list = list(self.bound_alphas)
+            np.random.shuffle(tmp_list)
+            for idx in tmp_list:
                 if self.take_step(i, idx) == 1:
                     return 1
 
@@ -183,7 +205,7 @@ class SMO:
                 for i in range(self.features.shape[0]):
                     changed_alphas += self.examine_example(i, tol)
             else:
-                set_cpy = copy.copy(self.not_0_not_c_alphas)
+                set_cpy = copy.copy(self.unbound_alphas)
                 for i in set_cpy:
                     changed_alphas += self.examine_example(i, tol)
 
@@ -192,6 +214,8 @@ class SMO:
             elif changed_alphas == 0:
                 examine_all = True
             iters += 1
+            # print(self.b)
+
 
         print(f"\n\n done in {iters} \n\n")
 
@@ -201,8 +225,10 @@ class SMO:
             prediction = self.hypothesis(self.features[i])
             if prediction >= 0 and self.labels[i] >= 0 or prediction < 0 and self.labels[i] < 0:
                 count += 1
-            print(prediction, self.labels[i])
+            if i < 30:
+                print(prediction,   self.labels[i])
         return count/len(self.labels)
+
 
 
 

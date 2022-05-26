@@ -42,29 +42,32 @@ def load_training_labels(file):
 def main():
     train_args = load_training_images('D:/Projects/Data/train-images-idx3-ubyte.gz')
     train_labels = load_training_labels('D:/Projects/Data/train-labels-idx1-ubyte.gz')
-    # test_args = load_training_images('D:/Projects/Data/t10k-images-idx3-ubyte.gz')
-    # test_labels = load_training_labels('D:/Projects/Data/t10k-labels-idx1-ubyte.gz')
-    x = copy.copy(train_args.reshape(train_args.shape[0], -1)).astype(np.float64)
+    test_args = load_training_images('D:/Projects/Data/t10k-images-idx3-ubyte.gz')
+    test_labels = load_training_labels('D:/Projects/Data/t10k-labels-idx1-ubyte.gz')
+
     y = copy.copy(train_labels)
+    x = copy.copy(train_args.reshape(train_args.shape[0], -1)).astype(np.float64)
     x /= (255/2)
     x -= 1
-    y = np.where(y != 1, -1, 1)
+    y = np.where(y != 8, -1, 1)
 
     max_iters = 1000000
-    reg_term = 10.0
+    reg_term = 1.0
     tol = 0.005
-    gamma = 200
-
-    s = SMO(x, y, reg_term, gamma)
-    test_svm(gamma, max_iters, reg_term, tol, x, y)
+    gamma = 10000
 
     # test_svm(gamma, max_iters, reg_term, tol, x, y)
 
-    # s = SVM_multiclass(dataset, train_labels, 10, 1, 100)
+    # test_svm(gamma, max_iters, reg_term, tol, x, y)
+
+    s = SVM_multiclass(train_args.reshape(train_args.shape[0], -1), train_labels, 10, reg_term, gamma, tol, max_iters)
+    s.test(x, test_labels, 10)
+    print("done!!!!")
 
 
-def test_svm(gamma, max_iters, reg_term, tol, x, y, sample_size=1000):
-    a = random.sample(list(np.where(y == 1)[0]), sample_size)
+def test_svm(gamma, max_iters, reg_term, tol, x, y):
+    a = list(np.where(y == 1)[0])
+    sample_size = len(a)
     b = random.sample(list(np.where(y == -1)[0]), sample_size)
     idx = a + b
     np.random.shuffle(idx)
