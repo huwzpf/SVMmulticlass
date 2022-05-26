@@ -23,8 +23,10 @@ class SVM_multiclass:
             np.random.shuffle(idx)
             self.svms.append(SMO(np.array([args[j, :] for j in idx]), np.array([labels[j, i] for j in idx]), c, gamma))
         print("done creating datasets")
+        i = 0
         for svm in self.svms:
-            svm.train(tol, max_iters)
+            svm.train(tol, max_iters, i)
+            i += 1
             print(f"trained, accuracy : {svm.plot()}")
 
         print("training done")

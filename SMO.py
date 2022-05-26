@@ -2,8 +2,7 @@ import numpy as np
 import random
 import time
 import copy
-import matplotlib.pyplot as plt
-
+import logging
 
 class SMO:
     class AlphaMetadata:
@@ -194,12 +193,13 @@ class SMO:
 
         return 0
 
-    def train(self, tol, max_iters=15):
+    def train(self, tol, max_iters=15, ident=0):
+        logging.basicConfig(filename='trainlog' + str(ident) + '.log', level=logging.DEBUG)
         iters = 0
         changed_alphas = 0
         examine_all = True
+        print("starting train")
         while iters < max_iters and (changed_alphas > 0 or examine_all):
-            print(iters)
             changed_alphas = 0
             if examine_all:
                 for i in range(self.features.shape[0]):
@@ -214,7 +214,7 @@ class SMO:
             elif changed_alphas == 0:
                 examine_all = True
             iters += 1
-            # print(self.b)
+            logging.info(f"iter: {iters}, b: {self.b}, changed alphas: {changed_alphas}, unbound: {len(self.unbound_alphas)}, bound : {len(self.bound_alphas)}")
 
 
         print(f"\n\n done in {iters} \n\n")

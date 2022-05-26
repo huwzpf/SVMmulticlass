@@ -51,7 +51,7 @@ def main():
     x -= 1
     y = np.where(y != 8, -1, 1)
 
-    max_iters = 1000000
+    max_iters = 10000
     reg_term = 1.0
     tol = 0.005
     gamma = 10000
