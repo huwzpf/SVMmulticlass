@@ -10,7 +10,7 @@ class SMO:
             self.bound = True
             self.error_cached = False
 
-    def __init__(self, x, y, c, gamma):
+    def __init__(self, x, y, c, gamma, km):
         self.b = 0
         self.alpha = np.zeros((x.shape[0], 1))
         self.features = x
@@ -23,6 +23,7 @@ class SMO:
         self.err_cache = {}
         self.unbound_err_cache = {}
         self.alpha_metadata = [SMO.AlphaMetadata() for _ in self.alpha]
+        self.kernel_matrix = km
 
     def get_error(self, idx):
         if self.alpha_metadata[idx].error_cached:
@@ -50,9 +51,15 @@ class SMO:
         return fl, fh
 
     def hypothesis(self, x):
+        # hypothesis used on x that is not in kernel matrix
         ret = np.transpose(np.multiply(self.alpha, self.labels))\
                   .dot(np.array([self.kernel_function(a, x, self.gamma) for a in self.features])
                        .reshape(self.features.shape[0], 1)) + self.b
+        return ret
+
+    def km_hypothesis(self, i):
+        # hypothesis from kernel matrix, used while training
+        ret = np.transpose(np.multiply(self.alpha, self.labels)).dot(self.kernel_matrix[:, i]) + self.b
         return ret
 
     def calculate_constrains(self, i, j):
@@ -63,9 +70,7 @@ class SMO:
             return max(0.0, float(self.alpha[j] - self.alpha[i])), min(self.c, float(self.c + self.alpha[j] - self.alpha[i]))
 
     def calculate_error(self, i):
-        return self.hypothesis(self.features[i]) - self.labels[i]
-
-
+        return self.km_hypothesis(i) - self.labels[i]
 
     def update_alpha_j(self, i, j, eta):
         ret = self.alpha[j] - float(self.labels[j] * (self.get_error(i) - self.get_error(j))) / eta
@@ -75,12 +80,11 @@ class SMO:
         elif ret <= L:
             ret = L
         return ret
+
     def calculate_b(self, i, j, a_i_old, a_j_old):
-        #b should be -b ??,
         b_1 = self.b - self.get_error(i) - self.labels[i] * (self.alpha[i] - a_i_old) * \
               self.kernel_function(self.features[i], self.features[i], self.gamma) - self.labels[j] *\
               (self.alpha[j] - a_j_old) * self.kernel_function(self.features[i], self.features[j], self.gamma)
-
 
         b_2 = self.b - self.get_error(j) - self.labels[i] * (self.alpha[i] - a_i_old) *\
               self.kernel_function(self.features[i], self.features[j], self.gamma) - self.labels[j] *\
@@ -135,7 +139,7 @@ class SMO:
             else:
                 new_a_j = self.alpha[j]
 
-        if abs(self.alpha[j] - new_a_j) < self.eps * (self.alpha[j] + new_a_j + self.eps):
+        if abs(self.alpha[j] - new_a_j) < self.eps:
             return 0
 
         self.alpha[j] = new_a_j
@@ -180,25 +184,38 @@ class SMO:
                     return 1
 
             tmp_list = list(self.unbound_alphas)
-            np.random.shuffle(tmp_list)
-            for idx in tmp_list:
-                if self.take_step(i, idx) == 1:
+            start = random.randint(0, len(tmp_list))
+            for j in range(len(tmp_list)):
+                if self.take_step(i, tmp_list[(j + start) % len(tmp_list)]) == 1:
                     return 1
 
             tmp_list = list(self.bound_alphas)
-            np.random.shuffle(tmp_list)
-            for idx in tmp_list:
-                if self.take_step(i, idx) == 1:
+            start = random.randint(0, len(tmp_list))
+            for j in range(len(tmp_list)):
+                if self.take_step(i, tmp_list[(j + start) % len(tmp_list)]) == 1:
                     return 1
 
         return 0
 
     def train(self, tol, max_iters=15, ident=0):
-        logging.basicConfig(filename='trainlog' + str(ident) + '.log', level=logging.DEBUG)
+        # create logger
+        filehandler = logging.FileHandler('logfile' + str(ident) + '.log', 'a')
+        formatter = logging.Formatter(
+            '%(asctime)-15s::%(levelname)s::%(filename)s::%(funcName)s::%(lineno)d::%(message)s')
+        filehandler.setFormatter(formatter)
+        log = logging.getLogger()  # root logger - Good to get it only once.
+        for hdlr in log.handlers[:]:  # remove the existing file handlers
+            if isinstance(hdlr, logging.FileHandler):
+                log.removeHandler(hdlr)
+        log.addHandler(filehandler)  # set the new handler
+        # set the log level to INFO, DEBUG as the default is ERROR
+        log.setLevel(logging.INFO)
+
         iters = 0
         changed_alphas = 0
         examine_all = True
-        print("starting train")
+        print(f"starting train {ident}")
+        logging.info(f"starting train {ident}")
         while iters < max_iters and (changed_alphas > 0 or examine_all):
             changed_alphas = 0
             if examine_all:
@@ -215,20 +232,19 @@ class SMO:
                 examine_all = True
             iters += 1
             logging.info(f"iter: {iters}, b: {self.b}, changed alphas: {changed_alphas}, unbound: {len(self.unbound_alphas)}, bound : {len(self.bound_alphas)}")
+            print(f"iter: {iters}, b: {self.b}, changed alphas: {changed_alphas}, unbound: {len(self.unbound_alphas)}, bound : {len(self.bound_alphas)}")
 
-
+        np.savetxt('alpha_'+str(ident)+'.csv', self.alpha, delimiter=",")
+        np.savetxt('b_'+str(ident)+'.csv', self.b, delimiter=",")
         print(f"\n\n done in {iters} \n\n")
 
-    def plot(self):
+    def cost_function(self):
+        # todo
         count = 0
         for i in range(self.labels.shape[0]):
-            prediction = self.hypothesis(self.features[i])
+            prediction = self.km_hypothesis(i)
             if prediction >= 0 and self.labels[i] >= 0 or prediction < 0 and self.labels[i] < 0:
                 count += 1
             if i < 30:
                 print(prediction,   self.labels[i])
         return count/len(self.labels)
-
-
-
-
