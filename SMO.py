@@ -23,7 +23,13 @@ class SMO:
         self.err_cache = {}
         self.unbound_err_cache = {}
         self.alpha_metadata = [SMO.AlphaMetadata() for _ in self.alpha]
-        self.kernel_matrix = km
+
+        if km is None:
+            self.train_hypothesis = self.no_km_hypothesis
+        else:
+            self.kernel_matrix = km
+            self.train_hypothesis = self.km_hypothesis
+
 
     def get_error(self, idx):
         if self.alpha_metadata[idx].error_cached:
@@ -57,6 +63,12 @@ class SMO:
                        .reshape(self.features.shape[0], 1)) + self.b
         return ret
 
+    def no_km_hypothesis(self, i):
+        ret = np.transpose(np.multiply(self.alpha, self.labels)) \
+                  .dot(np.array([self.kernel_function(a, self.features[i], self.gamma) for a in self.features])
+                       .reshape(self.features.shape[0], 1)) + self.b
+        return ret
+
     def km_hypothesis(self, i):
         # hypothesis from kernel matrix, used while training
         ret = np.transpose(np.multiply(self.alpha, self.labels)).dot(self.kernel_matrix[:, i]) + self.b
@@ -70,7 +82,7 @@ class SMO:
             return max(0.0, float(self.alpha[j] - self.alpha[i])), min(self.c, float(self.c + self.alpha[j] - self.alpha[i]))
 
     def calculate_error(self, i):
-        return self.km_hypothesis(i) - self.labels[i]
+        return self.train_hypothesis(i) - self.labels[i]
 
     def update_alpha_j(self, i, j, eta):
         ret = self.alpha[j] - float(self.labels[j] * (self.get_error(i) - self.get_error(j))) / eta
@@ -97,21 +109,12 @@ class SMO:
         else:
             self.b = (b_1 + b_2) / 2
 
-    def choice_cheuristic(self, i):
+    def choice_heuristic(self, i):
         e = self.get_error(i)
         if e >= 0:
             return min(self.unbound_err_cache, key=lambda k: self.unbound_err_cache[k])
         else:
             return max(self.unbound_err_cache, key=lambda k: self.unbound_err_cache[k])
-
-    def select_j(self, i):
-        random.seed(time.time())
-        j = random.randint(0, self.features.shape[0]-1)
-
-        while i == j:
-            j = random.randint(0, self.features.shape[0]-1)
-
-        return j
 
     def take_step(self, i, j):
         if i == j:
@@ -179,7 +182,7 @@ class SMO:
         if (self.labels[i] * E_i < -tol and self.alpha[i] < self.c) or \
                 (self.labels[i] * E_i > tol and self.alpha[i] > 0):
             if len(self.unbound_err_cache) != 0:
-                idx = self.choice_cheuristic(i)
+                idx = self.choice_heuristic(i)
                 if self.take_step(i, idx) == 1:
                     return 1
 
@@ -233,6 +236,7 @@ class SMO:
             iters += 1
             logging.info(f"iter: {iters}, b: {self.b}, changed alphas: {changed_alphas}, unbound: {len(self.unbound_alphas)}, bound : {len(self.bound_alphas)}")
             print(f"iter: {iters}, b: {self.b}, changed alphas: {changed_alphas}, unbound: {len(self.unbound_alphas)}, bound : {len(self.bound_alphas)}")
+
 
         np.savetxt('alpha_'+str(ident)+'.csv', self.alpha, delimiter=",")
         np.savetxt('b_'+str(ident)+'.csv', self.b, delimiter=",")

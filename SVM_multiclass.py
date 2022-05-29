@@ -16,6 +16,26 @@ class SVM_multiclass:
                 fp[i, j] = fp[j, i]
             for j in range(i, x.shape[0]):
                 fp[i, j] = -1 * np.transpose(x[i, :]-x[j, :]).dot(x[i, :]-x[j, :])
+            print(f"intermediate matrix {i} / {x.shape[0]} done")
+
+    def prepare_kernel_matrix(self, x, gamma):
+        # load intermediate matrix containing base for calculating kernels
+        for attempt in range(2):
+            try:
+                im = np.memmap("intermediate.dat", dtype='float32', mode='r', shape=(x.shape[0], x.shape[0]))
+                break
+            except FileNotFoundError:
+                print("preparing intermediate matrix")
+                self.prepare_intermediate_matrix(x)
+
+        fp = np.memmap("D:\kernels.dat", dtype='float32', mode='w+', shape=(x.shape[0], x.shape[0]))
+
+        for i in range(x.shape[0]):
+            for j in range(0, i):
+                fp[i, j] = fp[j, i]
+            for j in range(i, x.shape[0]):
+                fp[i, j] = np.exp(im[i, j] / gamma)
+            print(f"kernel matrix {i} / {x.shape[0]} done")
 
     def prepare_data(self, x, y, k, gamma):
         # switch y to one hot encoding (except -1 where 0 would normally be)
@@ -27,21 +47,13 @@ class SVM_multiclass:
         args /= (255 / 2)
         args -= 1
 
-        # load intermediate matrix containing base for calculating kernels
         for attempt in range(2):
             try:
-                im = np.memmap("intermediate.dat", dtype='float32', mode='r', shape=(x.shape[0], x.shape[0]))
+                fp = np.memmap("D:\kernels.dat", dtype='float32', mode='r', shape=(x.shape[0], x.shape[0]))
+                break
             except FileNotFoundError:
                 print("preparing intermediate matrix")
-                self.prepare_intermediate_matrix(args)
-
-        fp = np.memmap("C:\kernels.dat", dtype='float32', mode='w+', shape=(x.shape[0], x.shape[0]))
-
-        for i in range(x.shape[0]):
-            for j in range(0, i):
-                fp[i, j] = fp[j, i]
-            for j in range(i, x.shape[0]):
-                fp[i, j] = np.exp(im[i, j]/gamma)
+                self.prepare_intermediate_matrix(x)
 
         # prepare datasets for each SVM
         for i in range(k):
@@ -73,6 +85,7 @@ class SVM_multiclass:
                     km = np.memmap("kernels" + str(i) + ".dat", dtype='float32', mode='r',
                                                    shape=(len(labels), len(labels)))
                     self.svms.append(SMO(args, labels, c, gamma, km))
+                break
             except FileNotFoundError:
                 print("preparing data")
                 self.prepare_data(x, y, k, gamma)

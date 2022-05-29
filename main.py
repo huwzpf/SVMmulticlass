@@ -49,15 +49,27 @@ def main():
     x -= 1
     y = np.where(y != 8, -1, 1)
 
-    max_iters = 10000
+    max_iters = 1000
     reg_term = 1.0
-    tol = 0.005
+    tol = 0.0001
     gamma = 10000
 
     # test_svm(gamma, max_iters, reg_term, tol, x, y)
 
     # test_svm(gamma, max_iters, reg_term, tol, x, y)
-
+  #
+  #  s = SVM_multiclass(train_args.reshape(train_args.shape[0], -1), train_labels, 10, reg_term, gamma, tol, max_iters)
+   # s.test(x, test_labels, 10)
+    reg_term = 5.0
+    s = SVM_multiclass(train_args.reshape(train_args.shape[0], -1), train_labels, 10, reg_term, gamma, tol, max_iters)
+    s.test(x, test_labels, 10)
+    reg_term = 10.0
+    s = SVM_multiclass(train_args.reshape(train_args.shape[0], -1), train_labels, 10, reg_term, gamma, tol, max_iters)
+    s.test(x, test_labels, 10)
+    reg_term = 0.1
+    s = SVM_multiclass(train_args.reshape(train_args.shape[0], -1), train_labels, 10, reg_term, gamma, tol, max_iters)
+    s.test(x, test_labels, 10)
+    reg_term = 0.05
     s = SVM_multiclass(train_args.reshape(train_args.shape[0], -1), train_labels, 10, reg_term, gamma, tol, max_iters)
     s.test(x, test_labels, 10)
     print("done!!!!")
