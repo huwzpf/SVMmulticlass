@@ -221,6 +221,7 @@ class SMO:
         logging.info(f"starting train {ident}")
         while iters < max_iters and (changed_alphas > 0 or examine_all):
             changed_alphas = 0
+            prev_b = self.b
             prev_unbound_alphas = copy.copy(self.unbound_alphas)
             if examine_all:
                 for i in range(self.features.shape[0]):
@@ -237,10 +238,10 @@ class SMO:
             iters += 1
             logging.info(f"iter: {iters}, b: {self.b}, changed alphas: {changed_alphas}, unbound: {len(self.unbound_alphas)}, bound : {len(self.bound_alphas)}")
             print(f"iter: {iters}, b: {self.b}, changed alphas: {changed_alphas}, unbound: {len(self.unbound_alphas)}, bound : {len(self.bound_alphas)}")
-            if prev_unbound_alphas == self.unbound_alphas:
+            if prev_unbound_alphas == self.unbound_alphas and prev_b == self.b:
                 cnt += 1
                 if cnt > 10:
-                    print("exceededgit ")
+                    print("stop iter")
                     break
             else:
                 cnt = 0
