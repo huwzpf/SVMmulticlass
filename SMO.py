@@ -94,13 +94,13 @@ class SMO:
         return ret
 
     def calculate_b(self, i, j, a_i_old, a_j_old):
-        b_1 = self.b - self.get_error(i) - self.labels[i] * (self.alpha[i] - a_i_old) * \
-              self.kernel_function(self.features[i], self.features[i], self.gamma) - self.labels[j] *\
-              (self.alpha[j] - a_j_old) * self.kernel_function(self.features[i], self.features[j], self.gamma)
+        b_1 = self.b - self.get_error(i) - (self.labels[i] * (self.alpha[i] - a_i_old) *
+              self.kernel_matrix[i, i]) - (self.labels[j] *
+              (self.alpha[j] - a_j_old) * self.kernel_matrix[i, j])
 
-        b_2 = self.b - self.get_error(j) - self.labels[i] * (self.alpha[i] - a_i_old) *\
-              self.kernel_function(self.features[i], self.features[j], self.gamma) - self.labels[j] *\
-              (self.alpha[j] - a_j_old) * self.kernel_function(self.features[j], self.features[j], self.gamma)
+        b_2 = self.b - self.get_error(j) - (self.labels[i] * (self.alpha[i] - a_i_old) *
+              self.kernel_matrix[i, j]) - (self.labels[j] *
+              (self.alpha[j] - a_j_old) * self.kernel_matrix[j, j])
 
         if 0 < self.alpha[i] < self.c:
             self.b = b_1
@@ -125,9 +125,9 @@ class SMO:
         old_a_i = copy.deepcopy(self.alpha[i])
         old_a_j = copy.deepcopy(self.alpha[j])
 
-        k_ii = self.kernel_function(self.features[i], self.features[i], self.gamma)
-        k_jj = self.kernel_function(self.features[j], self.features[j], self.gamma)
-        k_ij = self.kernel_function(self.features[i], self.features[j], self.gamma)
+        k_ii = self.kernel_matrix[i, i]
+        k_jj = self.kernel_matrix[j, j]
+        k_ij = self.kernel_matrix[i, j]
 
         eta = 2*k_ij - k_ii - k_jj
 
@@ -200,55 +200,67 @@ class SMO:
 
         return 0
 
-    def train(self, tol, max_iters=15, ident=0):
-        # create logger
-        filehandler = logging.FileHandler('logfile' + str(ident) + '.log', 'a')
-        formatter = logging.Formatter(
-            '%(asctime)-15s::%(levelname)s::%(filename)s::%(funcName)s::%(lineno)d::%(message)s')
-        filehandler.setFormatter(formatter)
-        log = logging.getLogger()  # root logger - Good to get it only once.
-        for hdlr in log.handlers[:]:  # remove the existing file handlers
-            if isinstance(hdlr, logging.FileHandler):
-                log.removeHandler(hdlr)
-        log.addHandler(filehandler)  # set the new handler
-        # set the log level to INFO, DEBUG as the default is ERROR
-        log.setLevel(logging.INFO)
-        cnt = 0
-        iters = 0
-        changed_alphas = 0
-        examine_all = True
-        print(f"starting train {ident}")
-        logging.info(f"starting train {ident}")
-        while iters < max_iters and (changed_alphas > 0 or examine_all):
+    def train(self, tol, max_iters=15, ident=0, load=False):
+        if load:
+            self.alpha = np.loadtxt("alpha_" + str(ident) + ".csv")
+            self.b = np.loadtxt("b_" + str(ident) + ".csv")
+            print("loaded alpha!")
+        else:
+            # create logger
+            filehandler = logging.FileHandler('logfile' + str(ident) + '.log', 'a')
+            formatter = logging.Formatter(
+                '%(asctime)-15s::%(levelname)s::%(filename)s::%(funcName)s::%(lineno)d::%(message)s')
+            filehandler.setFormatter(formatter)
+            log = logging.getLogger()  # root logger - Good to get it only once.
+            for hdlr in log.handlers[:]:  # remove the existing file handlers
+                if isinstance(hdlr, logging.FileHandler):
+                    log.removeHandler(hdlr)
+            log.addHandler(filehandler)  # set the new handler
+            # set the log level to INFO, DEBUG as the default is ERROR
+            log.setLevel(logging.INFO)
+            cnt = 0
+            iters = 0
             changed_alphas = 0
-            prev_b = self.b
-            prev_unbound_alphas = copy.copy(self.unbound_alphas)
-            if examine_all:
-                for i in range(self.features.shape[0]):
-                    changed_alphas += self.examine_example(i, tol)
-            else:
-                set_cpy = copy.copy(self.unbound_alphas)
-                for i in set_cpy:
-                    changed_alphas += self.examine_example(i, tol)
+            examine_all = True
 
-            if examine_all:
-                examine_all = False
-            elif changed_alphas == 0:
-                examine_all = True
-            iters += 1
-            logging.info(f"iter: {iters}, b: {self.b}, changed alphas: {changed_alphas}, unbound: {len(self.unbound_alphas)}, bound : {len(self.bound_alphas)}")
-            print(f"iter: {iters}, b: {self.b}, changed alphas: {changed_alphas}, unbound: {len(self.unbound_alphas)}, bound : {len(self.bound_alphas)}")
-            if prev_unbound_alphas == self.unbound_alphas and prev_b == self.b:
-                cnt += 1
-                if cnt > 10:
-                    print("stop iter")
-                    break
-            else:
-                cnt = 0
+            print(self.kernel_matrix[11810, 1810], self.kernel_matrix[5, 7], self.kernel_matrix[476, 3251])
+            print(self.kernel_function(self.features[11810, :], self.features[1810, :], self.gamma)
+                  , self.kernel_function(self.features[5, :], self.features[7, :], self.gamma)
+                  , self.kernel_function(self.features[476, :], self.features[3251, :], self.gamma))
 
-        np.savetxt('alpha_'+str(ident)+'.csv', self.alpha, delimiter=",")
-        np.savetxt('b_'+str(ident)+'.csv', self.b, delimiter=",")
-        print(f"\n\n done in {iters} \n\n")
+            print(f"starting train {ident}")
+            logging.info(f"starting train {ident}")
+            while iters < max_iters and (changed_alphas > 0 or examine_all):
+                changed_alphas = 0
+                prev_b = self.b
+                prev_unbound_alphas = copy.copy(self.unbound_alphas)
+                if examine_all:
+                    for i in range(self.features.shape[0]):
+                        changed_alphas += self.examine_example(i, tol)
+                else:
+                    set_cpy = copy.copy(self.unbound_alphas)
+                    for i in set_cpy:
+                        if self.alpha_metadata[i].bound is False:
+                            changed_alphas += self.examine_example(i, tol)
+
+                if examine_all:
+                    examine_all = False
+                elif changed_alphas == 0:
+                    examine_all = True
+                iters += 1
+                logging.info(f"iter: {iters}, b: {self.b}, changed alphas: {changed_alphas}, unbound: {len(self.unbound_alphas)}, bound : {len(self.bound_alphas)}")
+                print(f"iter: {iters}, b: {self.b}, changed alphas: {changed_alphas}, unbound: {len(self.unbound_alphas)}, bound : {len(self.bound_alphas)}")
+                if prev_unbound_alphas == self.unbound_alphas and prev_b == self.b:
+                    cnt += 1
+                    if cnt > 10:
+                        print("stop iter")
+                        break
+                else:
+                    cnt = 0
+
+            np.savetxt('alpha_'+str(ident)+'.csv', self.alpha, delimiter=",")
+            np.savetxt('b_'+str(ident)+'.csv', self.b, delimiter=",")
+            print(f"\n\n done in {iters} \n\n")
 
     def cost_function(self):
         # todo
