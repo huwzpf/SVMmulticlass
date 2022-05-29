@@ -213,7 +213,7 @@ class SMO:
         log.addHandler(filehandler)  # set the new handler
         # set the log level to INFO, DEBUG as the default is ERROR
         log.setLevel(logging.INFO)
-
+        cnt = 0
         iters = 0
         changed_alphas = 0
         examine_all = True
@@ -221,6 +221,7 @@ class SMO:
         logging.info(f"starting train {ident}")
         while iters < max_iters and (changed_alphas > 0 or examine_all):
             changed_alphas = 0
+            prev_unbound_alphas = copy.copy(self.unbound_alphas)
             if examine_all:
                 for i in range(self.features.shape[0]):
                     changed_alphas += self.examine_example(i, tol)
@@ -236,7 +237,13 @@ class SMO:
             iters += 1
             logging.info(f"iter: {iters}, b: {self.b}, changed alphas: {changed_alphas}, unbound: {len(self.unbound_alphas)}, bound : {len(self.bound_alphas)}")
             print(f"iter: {iters}, b: {self.b}, changed alphas: {changed_alphas}, unbound: {len(self.unbound_alphas)}, bound : {len(self.bound_alphas)}")
-
+            if prev_unbound_alphas == self.unbound_alphas:
+                cnt += 1
+                if cnt > 10:
+                    print("exceededgit ")
+                    break
+            else:
+                cnt = 0
 
         np.savetxt('alpha_'+str(ident)+'.csv', self.alpha, delimiter=",")
         np.savetxt('b_'+str(ident)+'.csv', self.b, delimiter=",")
